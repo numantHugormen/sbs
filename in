@@ -1,0 +1,85 @@
+<Batch xmlns="http://schemas.microsoft.com/analysisservices/2003/engine">
+  <!-- Simple Insert with Direct Values -->
+  <Insert xmlns="http://schemas.microsoft.com/analysisservices/2003/engine">
+    <Object>
+      <DatabaseID>YourDatabase</DatabaseID>
+      <TableID>SalesData</TableID>
+    </Object>
+    <Rows>
+      <Row>
+        <OrderDate>2024-01-01T00:00:00</OrderDate>
+        <ProductID>PROD-001</ProductID>
+        <Quantity>5</Quantity>
+        <Revenue>500.00</Revenue>
+      </Row>
+      <Row>
+        <OrderDate>2024-01-02T00:00:00</OrderDate>
+        <ProductID>PROD-002</ProductID>
+        <Quantity>3</Quantity>
+        <Revenue>300.00</Revenue>
+      </Row>
+    </Rows>
+  </Insert>
+
+  <!-- Batch Insert with Multiple Tables -->
+  <Batch xmlns="http://schemas.microsoft.com/analysisservices/2003/engine"
+         Transaction="true">
+    <Insert>
+      <Object>
+        <DatabaseID>YourDatabase</DatabaseID>
+        <TableID>Products</TableID>
+      </Object>
+      <Rows>
+        <Row>
+          <ProductID>PROD-003</ProductID>
+          <ProductName>New Product</ProductName>
+          <Category>Electronics</Category>
+        </Row>
+      </Rows>
+    </Insert>
+    <Insert>
+      <Object>
+        <DatabaseID>YourDatabase</DatabaseID>
+        <TableID>SalesData</TableID>
+      </Object>
+      <Rows>
+        <Row>
+          <OrderDate>2024-01-03T00:00:00</OrderDate>
+          <ProductID>PROD-003</ProductID>
+          <Quantity>2</Quantity>
+          <Revenue>200.00</Revenue>
+        </Row>
+      </Rows>
+    </Insert>
+  </Batch>
+
+  <!-- Merge Command for Updating/Inserting -->
+  <Merge xmlns="http://schemas.microsoft.com/analysisservices/2003/engine">
+    <Source>
+      <Object>
+        <DatabaseID>YourDatabase</DatabaseID>
+        <TableID>StagingTable</TableID>
+      </Object>
+    </Source>
+    <Target>
+      <Object>
+        <DatabaseID>YourDatabase</DatabaseID>
+        <TableID>SalesData</TableID>
+      </Object>
+      <Keys>
+        <Key>
+          <Column>OrderID</Column>
+        </Key>
+      </Keys>
+    </Target>
+  </Merge>
+
+  <!-- Delete Data Before Insert -->
+  <Delete xmlns="http://schemas.microsoft.com/analysisservices/2003/engine">
+    <Object>
+      <DatabaseID>YourDatabase</DatabaseID>
+      <TableID>SalesData</TableID>
+    </Object>
+    <Condition>OrderDate &gt;= '2024-01-01' AND OrderDate &lt; '2024-02-01'</Condition>
+  </Delete>
+</Batch>
