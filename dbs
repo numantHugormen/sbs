@@ -1,0 +1,117 @@
+import pandas as pd
+from sqlalchemy import create_engine
+import pyodbc
+import json
+import datetime
+from adomd import AdomdConnection
+import logging
+
+class PowerBIDataPush:
+    def __init__(self, xmla_endpoint, workspace_id, dataset_name):
+        self.xmla_endpoint = xmla_endpoint
+        self.workspace_id = workspace_id
+        self.dataset_name = dataset_name
+        self.connection_string = (
+            f"Provider=MSOLAP;Data Source={xmla_endpoint};"
+            f"Initial Catalog={workspace_id};Identity Provider=AAD;"
+        )
+        
+        # Set up logging
+        logging.basicConfig(level=logging.INFO)
+        self.logger = logging.getLogger(__name__)
+    
+    def connect(self):
+        """Establish connection to XMLA endpoint"""
+        try:
+            self.connection = AdomdConnection(self.connection_string)
+            self.connection.open()
+            self.logger.info("Successfully connected to XMLA endpoint")
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to connect to XMLA endpoint: {str(e)}")
+            return False
+    
+    def execute_dax(self, dax_query):
+        """Execute DAX query on the dataset"""
+        try:
+            command = self.connection.create_command()
+            command.command_text = dax_query
+            return command.execute()
+        except Exception as e:
+            self.logger.error(f"Failed to execute DAX query: {str(e)}")
+            return None
+    
+    def push_data(self, table_name, data_frame):
+        """Push data to Power BI using XMLA endpoint"""
+        try:
+            # Convert DataFrame to JSON-like structure
+            data_json = data_frame.to_dict(orient='records')
+            
+            # Create merge statement
+            merge_statement = f"""
+            MERGE INTO [{table_name}] AS target
+            USING (
+                SELECT * FROM JSON_VALUE(@data_json)
+            ) AS source
+            ON target.ID = source.ID
+            WHEN MATCHED THEN
+                UPDATE SET {', '.join([f'target.{col} = source.{col}' 
+                                     for col in data_frame.columns if col != 'ID'])}
+            WHEN NOT MATCHED THEN
+                INSERT ({', '.join(data_frame.columns)})
+                VALUES ({', '.join(['source.' + col for col in data_frame.columns])});
+            """
+            
+            # Execute the merge
+            self.execute_dax(merge_statement)
+            self.logger.info(f"Successfully pushed {len(data_frame)} rows to {table_name}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to push data: {str(e)}")
+            return False
+    
+    def refresh_dataset(self):
+        """Trigger a refresh of the dataset"""
+        try:
+            refresh_command = f"REFRESH TABLE {self.dataset_name}"
+            self.execute_dax(refresh_command)
+            self.logger.info("Successfully triggered dataset refresh")
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to refresh dataset: {str(e)}")
+            return False
+
+# Example usage
+def main():
+    # Configuration
+    config = {
+        "xmla_endpoint": "powerbi://api.powerbi.com/v1.0/myorg/workspace_name",
+        "workspace_id": "your_workspace_id",
+        "dataset_name": "your_dataset_name",
+        "source_system": {
+            "connection_string": "your_source_system_connection_string",
+            "query": "SELECT * FROM source_table"
+        }
+    }
+    
+    # Initialize PowerBI pusher
+    pbi_pusher = PowerBIDataPush(
+        config["xmla_endpoint"],
+        config["workspace_id"],
+        config["dataset_name"]
+    )
+    
+    # Connect to source system
+    source_engine = create_engine(config["source_system"]["connection_string"])
+    
+    # Get data from source system
+    df = pd.read_sql(config["source_system"]["query"], source_engine)
+    
+    # Push data to Power BI
+    if pbi_pusher.connect():
+        pbi_pusher.push_data("target_table", df)
+        pbi_pusher.refresh_dataset()
+
+if __name__ == "__main__":
+    main()
